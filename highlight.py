@@ -4,6 +4,7 @@ from utils import gen_alphabet, get_words, get_chars, resize, normalize_images
 from keras.models import load_model
 from collections import Counter 
 
+
 class HighlightWords:
     def __init__(self):
         self._model = load_model('course_project/Models/model_more_classes2.h5');
@@ -19,7 +20,7 @@ class HighlightWords:
         self._highlighted_img = self._orig_img.copy()
         words = self._text.split()
         counter = Counter(words)
-        self._most_frequent_word = Counter.most_common(1)[1]
+        self._most_frequent_word = counter.most_common(1)[0]
         indxs = []
         for i, word in enumerate(words):
             if word == self._most_frequent_word:
@@ -46,7 +47,7 @@ class HighlightWords:
                 prediction = self._model.predict(img)
                 decoded = self._alphabet[np.argmax(prediction)]
                 
-                self._text += str(decoded)
+                self._text += str(decoded)[0]
                 
             self._text += ' '
             
@@ -55,6 +56,7 @@ class HighlightWords:
         self._orig_img = img
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = cv2.threshold(img, 180, 255, cv2.THRESH_BINARY_INV)[1]
+        self._thresholded_img = img
         self._get_bboxes()
         self._get_prediction()
         self._highlight_most_frequent()

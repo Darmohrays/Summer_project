@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
+
 def get_words(img):
     maxs = np.max(img, axis=1) # Take 
     indxs_y = np.where(maxs[:-1] != maxs[1:])[0]
@@ -45,11 +46,11 @@ def get_chars(img, words):
 
 def gen_alphabet():
     alphabet = [chr(i) for i in range(ord('A'), ord('Z')+1)]
-    symbols = ['point', 'dash', 'comma', '!', '?', 'colon', 'semicolon', '>', 
-                   '<', 'equals', 'ampersant', 'hash', 'dollar', 'percent', '^',
-                   'and', 'asterics', 'round_open', 'round_close',
-                  'plus', 'backslash', 'slash', 'square_open', 'square_close', 'curly_open', 'curly_close']
-    numbers = range(10)
+    symbols = ['.', '-', ',', '!', '?', ':', ';', '>', 
+                   '<', '=', '@', '#', '$', '%', '^',
+                   '&', '*', '(', ')',
+                  '+', '\\', '/', '[', ']', '{', '}']
+    numbers = [chr(i) for i in range(ord('0'), ord('9')+1)]
     for symbol in symbols:
         alphabet.append(symbol)
     for number in numbers:
