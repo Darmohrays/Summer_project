@@ -10,7 +10,7 @@ def get_words(img):
     cordinates = [] # (x, y, w, h)
     for indx_y in range(0, len(indxs_y)-1, 2):
         row = img[indxs_y[indx_y]:indxs_y[indx_y+1]]
-        kernel = np.ones((2, 6), np.uint8)
+        kernel = np.ones((2, 9), np.uint8)
         dilated = cv2.dilate(row, kernel, iterations=1)
         maxs1 = np.max(dilated, axis=0)
         indxs_x = np.where(maxs1[:-1] != maxs1[1:])[0]
