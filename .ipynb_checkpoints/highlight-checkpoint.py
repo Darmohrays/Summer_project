@@ -54,6 +54,7 @@ class HighlightWords:
             
     def fit(self, img):
         self._orig_img = img
+        self._text = ''
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = cv2.threshold(img, 180, 255, cv2.THRESH_BINARY_INV)[1]
         self._thresholded_img = img

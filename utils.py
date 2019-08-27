@@ -11,7 +11,8 @@ def get_words(img):
     cordinates = [] # (x, y, w, h)
     for indx_y in range(0, len(indxs_y)-1, 2):
         row = img[indxs_y[indx_y]:indxs_y[indx_y+1]]
-        kernel = np.ones((2, 9), np.uint8)
+        kernel_x = (indxs_y[indx_y+1] - indxs_y[indx_y]) % 20
+        kernel = np.ones((2, kernel_x+1), np.uint8)
         dilated = cv2.dilate(row, kernel, iterations=1)
         maxs1 = np.max(dilated, axis=0)
         indxs_x = np.where(maxs1[:-1] != maxs1[1:])[0]
@@ -65,7 +66,7 @@ def resize(img, cordinates):
     temp_img = cv2.copyMakeBorder(temp_img, (max_-h)//2, (max_-h)//2, (max_-w)//2, (max_-w)//2,
                                   cv2.BORDER_CONSTANT, value=(0, 0, 0))
     
-    resized = cv2.resize(temp_img, (28, 28), interpolation=cv2.INTER_CUBIC)
+    resized = cv2.resize(temp_img, (28, 28))
     return resized
 
 def normalize_images(images):
