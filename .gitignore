@@ -2,3 +2,7 @@ Project/course_project/alphabet/
 Project/course_project/test/
 Project/course_project/train/
 Project/course_project/tested/
+
+.DS_Store
+__pycache__
+.ipynb_checkpoints

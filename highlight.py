@@ -3,32 +3,35 @@ import cv2
 from utils import gen_alphabet, get_words, get_chars, resize, normalize_images
 from keras.models import load_model
 from collections import Counter 
+import pytesseract
+from keras.backend import set_learning_phase
+from textblob import TextBlob
 
 
 class HighlightWords:
     def __init__(self):
-        self._model = load_model('course_project/Models/model_more_classes2.h5');
+        self._model = load_model('course_project/Models/main_model.h5')
+        set_learning_phase(0)
         self._orig_img = None
         self._text = ''
         self._bboxes = None
         self._most_frequent_word = None
         self._alphabet = gen_alphabet()
-#         self._alphabet = alphabet2
-#         print('Initialized')
+        self._text_tesseract = None
         
     def _highlight_most_frequent(self):
         self._highlighted_img = self._orig_img.copy()
-        words = self._text.split()
+        words = self._corrected_text.split()
         counter = Counter(words)
-        self._most_frequent_word = counter.most_common(1)[0]
-        indxs = []
+        self._most_frequent_word = counter.most_common(1)[0][0]
         for i, word in enumerate(words):
             if word == self._most_frequent_word:
-                indxs.append(i)
                 (x, y, w, h) = self._bboxes[i]['word_bbox']
-                alpha = 3
-                beta = 100
-                self._highlighted_img[y:y+h, x:x+w] = np.clip(alpha*self._highlighted_img[y:y+h, x:x+w] + beta, 0, 255)
+                temp_area = self._highlighted_img[y:y+h, x:x+w].copy()
+                mask = self._thresholded_img[y:y+h, x:x+w].copy()
+                temp_area[mask == 255] = [255, 0, 0]
+                
+                self._highlighted_img[y:y+h, x:x+w] = temp_area 
         
                 
     def _get_bboxes(self):
@@ -38,26 +41,33 @@ class HighlightWords:
 
     def _get_prediction(self):
         for i, word in enumerate(self._bboxes.values()):
-#             print('Word: {}'.format(i))
+            words = np.zeros((len(word['cordinates']), 28, 28, 1))
             for j, character_bbox in enumerate(word['cordinates']):
                 img = resize(self._thresholded_img, character_bbox)
                 img = normalize_images(img)
-
                 img = img.reshape((1, 28, 28, 1))
+                words[j] = img
+                
                 prediction = self._model.predict(img)
                 decoded = self._alphabet[np.argmax(prediction)]
-                
-                self._text += str(decoded)[0]
+                self._text += str(decoded)
                 
             self._text += ' '
+    
+    def _get_tesseract_predictions(self):
+        self._text_tesseract = pytesseract.image_to_string(self._thresholded_img, lang='eng')
             
-            
+    def _correct_text(self):
+        blob = TextBlob(self._text)
+        self._corrected_text = str(blob.correct())
+    
     def fit(self, img):
         self._orig_img = img
-        self._text = ''
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = cv2.threshold(img, 180, 255, cv2.THRESH_BINARY_INV)[1]
-        self._thresholded_img = img
+        self._thresholded_img = img.copy()
         self._get_bboxes()
         self._get_prediction()
+        self._correct_text()
         self._highlight_most_frequent()
+        self._get_tesseract_predictions()

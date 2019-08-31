@@ -5,17 +5,17 @@ import os
 import pandas as pd
 
 
-def get_words(img):
-    maxs = np.max(img, axis=1) # Take 
+def get_words_(img):
+    maxs = np.max(img, axis=1) 
     indxs_y = np.where(maxs[:-1] != maxs[1:])[0]
-    cordinates = [] # (x, y, w, h)
+    words = []
     for indx_y in range(0, len(indxs_y)-1, 2):
+        distances = []
+        cordinates = []
         row = img[indxs_y[indx_y]:indxs_y[indx_y+1]]
-        kernel_x = (indxs_y[indx_y+1] - indxs_y[indx_y]) % 20
-        kernel = np.ones((2, kernel_x+1), np.uint8)
-        dilated = cv2.dilate(row, kernel, iterations=1)
-        maxs1 = np.max(dilated, axis=0)
+        maxs1 = np.max(row, axis=0)
         indxs_x = np.where(maxs1[:-1] != maxs1[1:])[0]
+        last_x = indxs_x[0]
         for indx_x in range(0, len(indxs_x)-1, 2):
             cordinates.append((
                 indxs_x[indx_x],
@@ -23,8 +23,46 @@ def get_words(img):
                 indxs_x[indx_x+1] - indxs_x[indx_x],
                 indxs_y[indx_y+1] - indxs_y[indx_y]
             ))
-            
-    return cordinates
+            distances.append(indxs_x[indx_x] - last_x)
+            last_x = indxs_x[indx_x+1]
+        
+        words += get_words_cordinates(cordinates, distances)
+        
+    return words, distances
+
+def get_words_cordinates(cordinates, distances):
+    hist, bins = np.histogram(distances)
+    pointer = 1
+    first_peak = None
+    second_peak = None
+    while pointer+1 < len(hist):
+        if hist[pointer] >= hist[pointer-1] and hist[pointer] >= hist[pointer-1]:
+            if first_peak is None:
+                first_peak = pointer
+            else:
+                second_peak = pointer
+                break
+            pointer += 1
+        pointer += 1
+    
+    divider = bins[second_peak+1]
+    
+    words = []
+    x, y, w, h = cordinates[0]
+    
+    for i, item in enumerate(distances[1:]):
+        if item < divider:
+            x_t, y_t, w_t, h_t = cordinates[i+1]
+            y = min(y, y_t)
+            w += w_t + item
+            h = max(h, h_t)
+        else:
+            words.append((x, y, w, h))
+            x, y, w, h = cordinates[i+1]
+
+    words.append((x, y, w, h))
+    
+    return words
 
 
 def get_chars(img, words):
@@ -46,7 +84,7 @@ def get_chars(img, words):
     return characters
 
 def gen_alphabet():
-    alphabet = [chr(i) for i in range(ord('A'), ord('Z')+1)]
+    alphabet = [chr(i) for i in range(ord('a'), ord('z')+1)]
     symbols = ['.', '-', ',', '!', '?', ':', ';', '>', 
                    '<', '=', '@', '#', '$', '%', '^',
                    '&', '*', '(', ')',
@@ -67,6 +105,7 @@ def resize(img, cordinates):
                                   cv2.BORDER_CONSTANT, value=(0, 0, 0))
     
     resized = cv2.resize(temp_img, (28, 28))
+    
     return resized
 
 def normalize_images(images):
@@ -75,6 +114,9 @@ def normalize_images(images):
     numerator = images - np.expand_dims(np.mean(images, 1), 1)
     denominator = np.expand_dims(np.std(images, 1), 1)
     return np.reshape(numerator / (denominator + 1e-7), (-1, H, W))
+
+# def normalize_images(images):
+#     return np.array(images, np.float) / 255.0
 
 def save_img(path, img, img_name):
     path_arr = path.split('/')
