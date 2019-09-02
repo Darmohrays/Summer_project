@@ -5,14 +5,39 @@ import os
 import pandas as pd
 
 
-def get_words_(img):
-    maxs = np.max(img, axis=1) 
-    indxs_y = np.where(maxs[:-1] != maxs[1:])[0]
-    words = []
+def get_words(img):
+    """
+    Function returns bboxes for each word and for chars in it.
+    
+    Parameters
+    ----------
+    img: np.array
+    Thresholded grayscale image.
+    
+    Returns
+    -------
+    words: list
+    Array of words bboxes in the form (x, y, w, h) where (x, y) - lower left point, h - height of bbox, w - width
+    
+    chars: list of lists
+    Array which contains arrays that represent coordinates of each  character in word
+
+    """
+    
+    # here we take maximum elements by word so we can detect rows with words
+    # if there is a word the value would be 255, if not - 0
+    maxs = np.max(img, axis=1) # maximum element by row
+    indxs_y = np.where(maxs[:-1] != maxs[1:])[0] # indexes of elements where is transition from 255 to 0 or vice versa
+    words = [] # list for storing words bboxes
+    chars = [] # list for storing characters bboxes
+
+    # In this loop we do the same operation but get max values by column so we can know
+    # Where the character ends and starts
     for indx_y in range(0, len(indxs_y)-1, 2):
-        distances = []
+
+        distances = [] # list to store distances between 
         cordinates = []
-        row = img[indxs_y[indx_y]:indxs_y[indx_y+1]]
+        row = img[indxs_y[indx_y]:indxs_y[indx_y+1]] # take row of the text
         maxs1 = np.max(row, axis=0)
         indxs_x = np.where(maxs1[:-1] != maxs1[1:])[0]
         last_x = indxs_x[0]
@@ -25,65 +50,97 @@ def get_words_(img):
             ))
             distances.append(indxs_x[indx_x] - last_x)
             last_x = indxs_x[indx_x+1]
+
+        temp_words, temp_chars = get_words_cordinates(cordinates, distances)
+        words += temp_words
+        chars += temp_chars
         
-        words += get_words_cordinates(cordinates, distances)
-        
-    return words, distances
+    return words, chars
+
 
 def get_words_cordinates(cordinates, distances):
-    hist, bins = np.histogram(distances)
-    pointer = 1
-    first_peak = None
-    second_peak = None
-    while pointer+1 < len(hist):
-        if hist[pointer] >= hist[pointer-1] and hist[pointer] >= hist[pointer-1]:
-            if first_peak is None:
-                first_peak = pointer
-            else:
-                second_peak = pointer
-                break
-            pointer += 1
-        pointer += 1
+    """
+    Parameters
+    ----------
+    cordinates: tuple or list which contains bboxes for each character in form - (x, y, w, h), where (x, y) - lower left point, h -       height of bbox, w - width
     
-    divider = bins[second_peak+1]
-    
+    """
+    hist, bins = np.histogram(distances) # get histogram of distances between characters
+        
+    divider = find_divider(hist, bins) # get value by which we will decide if character belong to current word or starts next
     words = []
+    chars = []
     x, y, w, h = cordinates[0]
     
-    for i, item in enumerate(distances[1:]):
-        if item < divider:
-            x_t, y_t, w_t, h_t = cordinates[i+1]
-            y = min(y, y_t)
-            w += w_t + item
-            h = max(h, h_t)
-        else:
-            words.append((x, y, w, h))
-            x, y, w, h = cordinates[i+1]
-
-    words.append((x, y, w, h))
+    if w*h < 25: # weeding out anomalies
+        return []
     
-    return words
+    if check_for_one_word_in_line(distances): # check is it only one word in row so we can treat this case different
+        for i, (x_t, y_t, w_t, h_t) in enumerate(cordinates[1:]):
+            y = min(y, y_t)
+            h = max(h, h_t)
+            w += w_t + distances[i]
+        
+        words.append((x, y, w+distances[i+1], h))
+        chars = cordinates
+    else:
+        start = 0 # start index for current word
+        end = 0 # end index for current word
+        for i, item in enumerate(distances[1:]):
+            if item < divider:
+                x_t, y_t, w_t, h_t = cordinates[i+1]
+                y = min(y, y_t)
+                w += w_t + item
+                h = max(h, h_t)
+                end += 1
+            else:
+                words.append((x, y, w, h))
+                x, y, w, h = cordinates[i+1]
+                end += 1
+                chars.append(cordinates[start:end])
+                start = end
 
+        chars.append(cordinates[end:])
+        words.append((x, y, w, h))
+        
+    return words, chars
 
-def get_chars(img, words):
-    characters = {}
-    for i, (x, y, w, h) in enumerate(words):
-        cordinates = []
-        word = img[y:y+h, x:x+w]
-        maxs = np.max(word, axis=0)
-        indxs_x = np.where(maxs[:-1] != maxs[1:])[0]
-        for indx_x in range(0, len(indxs_x)-1, 2):
-            cordinates.append((
-                x+indxs_x[indx_x],
-                y,
-                indxs_x[indx_x+1] - indxs_x[indx_x],
-                h
-            ))
-            
-        characters[i] = {'cordinates': cordinates, 'word_bbox': (x, y, w, h)}
-    return characters
+def find_divider(hist, bins):
+    """
+    Function finds distance value.
+    
+    If distance between separate characters more than this value, characters are in the same word and if distance lower -                 characters belong to different words
+    """
+    left = 0
+    right = len(hist)-1
+    
+    while hist[left] == 0:
+        left += 1
+        
+    while hist[right] == 0:
+        right -= 1
+    
+    divider = bins[left]*0.5 + bins[right]*0.5
+    
+    return divider
+        
+def check_for_one_word_in_line(distances):
+    """
+    Function chechs whether it is only one word in line
+    """
+    mean = np.mean(distances)
+    var = np.var(distances)
+    
+    if mean > var:
+        return True
+
+    return False        
+
 
 def gen_alphabet():
+    """
+    Generates alphabet to decode predictions
+    """
     alphabet = [chr(i) for i in range(ord('a'), ord('z')+1)]
     symbols = ['.', '-', ',', '!', '?', ':', ';', '>', 
                    '<', '=', '@', '#', '$', '%', '^',
@@ -97,6 +154,9 @@ def gen_alphabet():
     return alphabet
 
 def resize(img, cordinates):
+    """
+    Resizes images to (28, 28)
+    """
     [x, y, w, h] = cordinates
     temp_img = img[y:y+h, x:x+w]
     
@@ -109,16 +169,23 @@ def resize(img, cordinates):
     return resized
 
 def normalize_images(images):
+    """
+    Normalizes images
+    """
     H, W = 28, 28
     images = np.reshape(images, (-1, H * W))
     numerator = images - np.expand_dims(np.mean(images, 1), 1)
     denominator = np.expand_dims(np.std(images, 1), 1)
+    
     return np.reshape(numerator / (denominator + 1e-7), (-1, H, W))
 
 # def normalize_images(images):
 #     return np.array(images, np.float) / 255.0
 
 def save_img(path, img, img_name):
+    """
+    Save the image by a given path
+    """
     path_arr = path.split('/')
     cur_path = ''
     for p in path_arr:
@@ -126,41 +193,3 @@ def save_img(path, img, img_name):
         if not os.path.exists(cur_path):
             os.mkdir(cur_path)
     plt.imsave(path + img_name, img, cmap='gray')
-
-
-# def count_words():
-#     res = {}
-#     path = 'test_data/test_y/test_y_digit.txt'
-#     file = open(path, 'r')
-#     cur_x = 0
-#     for line in file:
-#         if len(line) == 2 or len(line) == 3:
-#             cur_x += 1
-#             res[cur_x] = {'words': 0, 'characters': 0}
-#             continue
-            
-#         words = len(line.split(' '))
-#         characters = len(line.replace(' ', ''))        
-
-#         res[cur_x]['words'] += words
-#         res[cur_x]['characters'] += characters
-    
-#     df = pd.DataFrame(res.values())
-#     df.to_csv('words_count.csv', index=False)
-    
-# def check_words():
-#     path_word = 'test/x_{}/words/'
-#     df = pd.read_csv('words_count.csv')
-#     mismatches = 0
-    
-#     for i in range(1, 41):
-#         words = os.listdir(path_word.format(i))
-#         if len(words) != df.loc[i-1]['words'] and check_words:
-#             print('Mismatch in word in {} sample'.format(i))
-#             print('Expected: {}'.format(df.loc[i-1]['words']))
-#             print('Got: {}'.format(len(words)))
-#             print('')
-#             mismatches += 1
-            
-#     return mismatches
-
