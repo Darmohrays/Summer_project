@@ -51,7 +51,13 @@ def get_words(img):
             distances.append(indxs_x[indx_x] - last_x)
             last_x = indxs_x[indx_x+1]
 
-        temp_words, temp_chars = get_words_cordinates(cordinates, distances)
+        temp = get_words_cordinates(cordinates, distances)
+        if temp == -1:
+            continue
+        
+        temp_words = temp[0]
+        temp_chars = temp[1]
+            
         words += temp_words
         chars += temp_chars
         
@@ -66,14 +72,14 @@ def get_words_cordinates(cordinates, distances):
     
     """
     hist, bins = np.histogram(distances) # get histogram of distances between characters
-        
+    
     divider = find_divider(hist, bins) # get value by which we will decide if character belong to current word or starts next
     words = []
     chars = []
     x, y, w, h = cordinates[0]
     
     if w*h < 25: # weeding out anomalies
-        return []
+        return -1
     
     if check_for_one_word_in_line(distances): # check is it only one word in row so we can treat this case different
         for i, (x_t, y_t, w_t, h_t) in enumerate(cordinates[1:]):
