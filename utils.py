@@ -100,7 +100,7 @@ def get_words_cordinates(cordinates, distances):
                 chars.append(cordinates[start:end])
                 start = end
 
-        chars.append(cordinates[end:])
+        chars.append(cordinates[start:])
         words.append((x, y, w, h))
         
     return words, chars

@@ -24,7 +24,7 @@ class HighlightWords:
         
     def _highlight_most_frequent(self):
         self._highlighted_img = self._orig_img.copy()
-        words = self._corrected_text.split()
+        words = self._text.split()
         counter = Counter(words)
         if not counter.most_common(1):
             return
