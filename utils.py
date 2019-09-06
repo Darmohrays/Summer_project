@@ -2,7 +2,6 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import os
-import pandas as pd
 
 
 def get_words(img):
@@ -199,3 +198,62 @@ def save_img(path, img, img_name):
         if not os.path.exists(cur_path):
             os.mkdir(cur_path)
     plt.imsave(path + img_name, img, cmap='gray')
+
+
+def highlight_words(img, text, words_bboxes):
+    """
+    Return image where most common word is highlighted with red color
+    """
+    words = text.split()
+    counter = Counter(words)
+    highlighted_img = img.copy()
+    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    thresholded_img = cv2.threshold(gray_img, 180, 255, cv2.THRESH_BINARY_INV)[1]
+    if not counter.most_common(1):
+        return
+    most_frequent_word = counter.most_common(1)[0][0]
+    print(len(words))
+    print('bboxes len: %d' % (len(words_bboxes)))
+    for i, word in enumerate(words):
+        if word == most_frequent_word:
+            (x, y, w, h) = words_bboxes[i]
+            temp_area = highlighted_img[y:y+h, x:x+w]
+            mask = thresholded_img[y:y+h, x:x+w]
+
+            temp_area[mask == 255] = [155, 115, 255]
+            highlighted_img[y:y+h, x:x+w] = temp_area
+    
+    return highlighted_img
+
+
+def correct_text(text):
+    """
+    Returns corrected text
+    """
+    blob = TextBlob(text)
+    corrected_text = str(blob.correct())
+    return corrected_text
+
+
+def get_predicted_text(img, bboxes):
+    K.clear_session()
+    model = load_model('course_project/Models/model.h5')
+    K.set_learning_phase(0)
+    graph = tf.get_default_graph()
+    alphabet = gen_alphabet()
+    text = ''
+    for i, word in enumerate(bboxes):
+        for j, character_bbox in enumerate(word):
+            img = resize(img, character_bbox)
+            img = normalize_images(img)
+            img = img.reshape((1, 28, 28, 1))
+            
+            with graph.as_default():
+                prediction = model.predict(img)
+                
+            decoded = alphabet[np.argmax(prediction)]
+            text += str(decoded)
+            
+        text += ' '
+
+    return text

@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 from utils import gen_alphabet, get_words, resize, normalize_images
 from keras.models import load_model
-from collections import Counter 
+from collections import Counter
 import pytesseract
 from keras.backend import set_learning_phase
 from textblob import TextBlob
@@ -18,13 +18,12 @@ class HighlightWords:
         self._text = ''
         self._most_frequent_word = None
         self._alphabet = gen_alphabet()
-        self._text_tesseract = ''
         
         self.__fit(img)
         
     def _highlight_most_frequent(self):
         self._highlighted_img = self._orig_img.copy()
-        words = self._text.split()
+        words = self._corrected_text.split()
         counter = Counter(words)
         if not counter.most_common(1):
             return
@@ -34,11 +33,10 @@ class HighlightWords:
                 (x, y, w, h) = self._bboxes_words[i]
                 temp_area = self._highlighted_img[y:y+h, x:x+w].copy()
                 mask = self._thresholded_img[y:y+h, x:x+w].copy()
-                temp_area[mask == 255] = [255, 0, 0]
+                temp_area[mask == 255] = [255, 115, 115]
                 
                 self._highlighted_img[y:y+h, x:x+w] = temp_area 
-        
-                
+                     
     def _get_bboxes(self):
         words, chars = get_words(self._thresholded_img)
         self._bboxes_chars = chars
@@ -56,9 +54,6 @@ class HighlightWords:
                 self._text += str(decoded)
                 
             self._text += ' '
-    
-    def _get_tesseract_predictions(self):
-        self._text_tesseract = pytesseract.image_to_string(self._thresholded_img, lang='eng')
             
     def _correct_text(self):
         blob = TextBlob(self._text)
@@ -67,10 +62,9 @@ class HighlightWords:
     def __fit(self, img):
         self._orig_img = img
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        img = cv2.threshold(img, 180, 255, cv2.THRESH_BINARY_INV)[1]
+        img = cv2.threshold(img, 250, 255, cv2.THRESH_BINARY_INV)[1]
         self._thresholded_img = img
         self._get_bboxes()
         self._get_prediction()
         self._correct_text()
         self._highlight_most_frequent()
-        self._get_tesseract_predictions()
